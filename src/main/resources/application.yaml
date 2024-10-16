@@ -5,17 +5,29 @@ spring:
   cloud:
     gateway:
       routes:
-      - id: audit
-        uri: ${AUDIT_URI:http://localhost:7001}
+      - id: authorization-server
+        uri: ${AUTH_URI:http://localhost:6000}
         predicates:
-          - Path=/audit/**
+          - Path=/api/**
         filters:
           - JWTAuthFilter
 
 
   security:
     oauth2:
-      resourceserver:
+      client:
+        registration:
+          keycloak:
+            client-id: app-gateway
+            client-secret: LJIOPIdHnytjLNgc5oYBsRJjN67fpDsb
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:5003/login/oauth2/code/keycloak
+        provider:
+          keycloak:
+            authorization-uri: https://localhost:8443/auth/realms/master/protocol/openid-connect/auth
+            token-uri: https://localhost:8443/auth/realms/master/protocol/openid-connect/token
+            user-info-uri: https://localhost:8443/auth/realms/master/protocol/openid-connect/userinfo
+      resourceserver:          #authorization server needs jwt issuer to check and validate (roles, scopes, etc) the jwt against the issuer signatures
         jwt:
           issuer-uri: https://localhost:8443/realms/master
 
