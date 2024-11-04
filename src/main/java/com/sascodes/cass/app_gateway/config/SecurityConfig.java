@@ -3,6 +3,7 @@ package com.sascodes.cass.app_gateway.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.sascodes.cass.app_gateway.filters.AuthorizationRedirectionFilter;
+import com.sascodes.cass.app_gateway.filters.JWTAuthFilter;
 import com.sascodes.cass.app_gateway.handlers.CassAuthenticationFailureHandler;
 import com.sascodes.cass.app_gateway.service.CASSOAuth2UserService;
 import com.sascodes.cass.app_gateway.sessions.CASSNoOpReactiveSessionRepository;
@@ -21,6 +22,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.client.reactive.ClientHttpConnector;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
@@ -35,6 +37,7 @@ import org.springframework.security.oauth2.client.userinfo.ReactiveOAuth2UserSer
 import org.springframework.security.oauth2.client.web.server.DefaultServerOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
+import org.springframework.security.oauth2.core.oidc.user.DefaultOidcUser;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.DefaultServerRedirectStrategy;
@@ -184,6 +187,7 @@ public class SecurityConfig {
             securityFilterChain = securityFilterChain.addFilterBefore(loginRedirectorFilter, SecurityWebFiltersOrder.LOGIN_PAGE_GENERATING)
                     .addFilterBefore(logoutFilter, SecurityWebFiltersOrder.LOGOUT_PAGE_GENERATING);
         }
+        securityFilterChain = securityFilterChain.addFilterAfter(new JWTAuthFilter(), SecurityWebFiltersOrder.AUTHORIZATION);
         http.headers(headers ->
                 headers.xssProtection(
                         xss -> xss.headerValue(org.springframework.security.web.server.header.XXssProtectionServerHttpHeadersWriter.HeaderValue.ENABLED_MODE_BLOCK)
@@ -235,7 +239,28 @@ public class SecurityConfig {
             @Override
             public Mono<Void> onAuthenticationSuccess(WebFilterExchange exchange, Authentication authentication) {
                 try {
-                    return redirectStrategy.sendRedirect(exchange.getExchange(),new URI(helper(exchange.getExchange())))
+                    //Convert to oidc instance to retrieve the token values. you can also get a lot of other fields like claims here
+                    var defaultOidcUser = (DefaultOidcUser) authentication.getPrincipal();
+                    var tokenValue = defaultOidcUser.getIdToken().getTokenValue();
+                    ServerWebExchange serverWebExchange = exchange.getExchange();
+//                    ServerHttpRequest mutatedRequest = serverWebExchange.getRequest().mutate()
+//                            .header("Authorization", tokenValue).build();
+
+//                    ServerWebExchange mutatedServerWebExchange = serverWebExchange.mutate()
+//                            .request(mutatedRequest)
+//                            .build();
+
+                    serverWebExchange.getResponse().addCookie(ResponseCookie.from("Authorization", tokenValue)
+                                    .httpOnly(true)
+                                    .path("/")
+                            .build());
+
+
+                    //put the mutated serverWebExchange back to webFilterExchange
+                    WebFilterExchange webFilterExchange = new WebFilterExchange(serverWebExchange, exchange.getChain());
+
+                    //continue filter chaining
+                    return redirectStrategy.sendRedirect(webFilterExchange.getExchange(),new URI(helper(exchange.getExchange())))
                             .doFinally(a->{
                                 if(redirecturlLoginMap.containsKey(exchange.getExchange().getRequest().getRemoteAddress().getHostName().toString())){
                                     HashMap<String,String> values = (HashMap<String,String>) redirecturlLoginMap.get(exchange.getExchange().getRequest().getRemoteAddress().getHostName().toString());
