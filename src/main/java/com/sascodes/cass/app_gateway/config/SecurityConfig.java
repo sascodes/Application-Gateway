@@ -82,6 +82,7 @@ import java.util.function.Consumer;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    //security config
     private final SessionProperties sessionProperties;
     private final Environment env;
 
@@ -243,12 +244,6 @@ public class SecurityConfig {
                     var defaultOidcUser = (DefaultOidcUser) authentication.getPrincipal();
                     var tokenValue = defaultOidcUser.getIdToken().getTokenValue();
                     ServerWebExchange serverWebExchange = exchange.getExchange();
-//                    ServerHttpRequest mutatedRequest = serverWebExchange.getRequest().mutate()
-//                            .header("Authorization", tokenValue).build();
-
-//                    ServerWebExchange mutatedServerWebExchange = serverWebExchange.mutate()
-//                            .request(mutatedRequest)
-//                            .build();
 
                     serverWebExchange.getResponse().addCookie(ResponseCookie.from("Authorization", tokenValue)
                                     .httpOnly(true)
