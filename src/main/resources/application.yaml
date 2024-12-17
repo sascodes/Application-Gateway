@@ -5,10 +5,56 @@ spring:
   cloud:
     gateway:
       routes:
-      - id: audit
+      - id: authorization-server
+        uri: ${AUTH_URI:http://localhost:6000}
+        predicates:
+          - Path=/api/**
+        #filters:
+          #- JWTAuthFilter
+      - id: audit-service
         uri: ${AUDIT_URI:http://localhost:7001}
         predicates:
           - Path=/audit/**
-        filters:
-          - JWTAuthFilter
+        #filters:
+          #- JWTAuthFilter
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            scope: openid,profile,email
+            client-id: app-gateway
+            client-secret: Sh5v4gTUbZT7UXpOCHXvV3EUuKzsMN2x
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:5003/login/oauth2/code/keycloak
+        provider:
+          keycloak:
+            authorization-uri: http://localhost:8083/auth/realms/sascodes/protocol/openid-connect/auth
+            token-uri: http://localhost:8083/auth/realms/sascodes/protocol/openid-connect/token
+            user-info-uri: http://localhost:8083/auth/realms/sascodes/protocol/openid-connect/userinfo
+            jwk-set-uri: http://localhost:8083/auth/realms/sascodes/protocol/openid-connect/certs
+            user-name-attribute: preferred_username
+      resourceserver:          #authorization server needs jwt issuer to check and validate (roles, scopes, etc) the jwt against the issuer signatures
+        jwt:
+          issuer-uri: http://localhost:8083/auth/realms/sascodes
+
+server:
+  port: 5003
+
+
+cass:
+  public:
+    urls: "/getDetails,/count"
+  private:
+    urls: "/audit/**"
+  resource-server:
+    enabled: true
+  user-info:
+    endpoint: "http://localhost:8083/auth/realms/sascodes/protocol/openid-connect/userinfo"
+
+logging:
+  level:
+    org.springframework.web.server.session: DEBUG
+    org.springframework.security.oauth2.client: DEBUG
+
 
